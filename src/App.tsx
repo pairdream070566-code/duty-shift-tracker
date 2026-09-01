@@ -33,12 +33,11 @@ export const AppContent: React.FC = () => {
             </div>
             <div>
               <h1 className="font-black text-base sm:text-lg leading-none text-slate-800 flex items-center gap-1.5">
-                ตารางเวรของนัน <span className="text-[10px] bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded-full font-bold">พจร. 8,000</span>
+                ตารางเวรของดรีม <span className="text-[10px] bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded-full font-bold">พจร. 8,000</span>
               </h1>
-              <p className="text-[11px] text-slate-500 mt-1">บันทึกเวร • คำนวณเงิน ࠢ เชไคฉ 100 ชม.</p>
+              <p className="text-[11px] text-slate-500 mt-1">บันทึกเวร • คำนวณเงิน • เช็คยอด 100 ชม.</p>
             </div>
           </div>
-
 
           <div className="flex items-center gap-2">
             <button
@@ -46,13 +45,13 @@ export const AppContent: React.FC = () => {
               className="hidden sm:flex items-center gap-1.5 px-3.5 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold shadow-sm shadow-sky-600/20 transition-all"
             >
               <Plus className="w-4 h-4" />
-              ลงเวรวันนี
+              ลงเวรวันนี้
             </button>
 
             <button
               onClick={() => setIsSettingsOpen(true)}
               className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors"
-              title="ตั้งค่า & เจ้งตออน"
+              title="ตั้งค่า & แจ้งเตือน"
             >
               <Settings className="w-5 h-5" />
             </button>
@@ -107,7 +106,7 @@ export const AppContent: React.FC = () => {
       </main>
 
       <footer className="text-center text-xs text-slate-400 py-6 border-t border-slate-200/60 max-w-4xl mx-auto">
-        <p>เวบแอน นันทึกตารางเวรส่วนกรรมตรัร • เช่อบเตตบรเนนแลา ส pairdream070566@gmail.com</p>
+        <p>เว็บแอปบันทึกตารางเวรส่วนตัว & คำนวณเงิน พจร. • บัญชีของคุณดรีม</p>
       </footer>
 
       {selectedDate && (
