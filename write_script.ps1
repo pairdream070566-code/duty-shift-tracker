@@ -1,0 +1,1 @@
+[System.IO.File]::WriteAllText('src/utils/notifications.ts', 'from notif')
