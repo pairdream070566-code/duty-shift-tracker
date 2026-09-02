@@ -112,11 +112,11 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [firebaseConfigState]);
 
   // ระบบ Real-time Listener (อัปเดตข้อมูลข้ามเครื่องทันทีแบบเรียลไทม์)
+  // ระบบ Real-time Listener (อัปเดตข้อมูลข้ามเครื่องทันทีแบบเรียลไทม์)
   useEffect(() => {
-    if (!user) return;
-
+    const docId = user?.email ? user.email.toLowerCase().replace(/[^a-z0-9]/g, '_') : 'default_admin_shifts';
     const db = getFirestore();
-    const docRef = doc(db, 'user_shifts', user.uid);
+    const docRef = doc(db, 'user_shifts', docId);
 
     const unsubscribeSnapshot = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
@@ -138,7 +138,7 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             if (Array.isArray(parsed) && parsed.length > 0) {
               setDoc(docRef, {
                 shifts: parsed,
-                email: user.email,
+                email: user?.email || ALLOWED_ADMIN_EMAIL,
                 updatedAt: new Date().toISOString(),
               }, { merge: true });
             }
@@ -178,14 +178,14 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const monthSummary = calculateMonthSummary(monthKey, shifts);
 
   const syncWithCloud = async () => {
-    if (!user) return;
     try {
       setIsSyncing(true);
+      const docId = user?.email ? user.email.toLowerCase().replace(/[^a-z0-9]/g, '_') : 'default_admin_shifts';
       const db = getFirestore();
-      const docRef = doc(db, 'user_shifts', user.uid);
+      const docRef = doc(db, 'user_shifts', docId);
       await setDoc(docRef, {
         shifts,
-        email: user.email,
+        email: user?.email || ALLOWED_ADMIN_EMAIL,
         updatedAt: new Date().toISOString(),
       }, { merge: true });
 
