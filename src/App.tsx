@@ -5,13 +5,21 @@ import { CalendarView } from './components/CalendarView';
 import { ShiftListView } from './components/ShiftListView';
 import { ShiftModal } from './components/ShiftModal';
 import { SettingsModal } from './components/SettingsModal';
-import { Calendar, List, Settings, Plus, Clock } from 'lucide-react';
+import { Calendar, List, Settings, Plus, Clock, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
 
 export const AppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'CALENDAR' | 'LIST'>('CALENDAR');
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    setTimeout(() => {
+      window.location.reload();
+    }, 200);
+  };
 
   const handleOpenDateModal = (dateStr: string) => {
     setSelectedDate(dateStr);
@@ -25,7 +33,7 @@ export const AppContent: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-16">
-      <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-200/80 x-4 py-3 sm:px-6">
+      <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-200/80 px-4 py-3 sm:px-6">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-sky-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-sky-600/20">
@@ -39,7 +47,15 @@ export const AppContent: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={handleRefresh}
+              className="p-2 text-slate-600 hover:text-sky-600 hover:bg-slate-100 rounded-xl transition-colors active:scale-95"
+              title="รีเฟรชข้อมูล (Refresh)"
+            >
+              <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin text-sky-600' : ''}`} />
+            </button>
+
             <button
               onClick={() => handleOpenDateModal(todayStr)}
               className="hidden sm:flex items-center gap-1.5 px-3.5 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold shadow-sm shadow-sky-600/20 transition-all"
