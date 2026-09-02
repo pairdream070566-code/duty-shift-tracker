@@ -74,7 +74,7 @@ export const StatsDashboard: React.FC = () => {
               ฿{monthSummary.netTotalEarnings.toLocaleString()}
             </div>
             <div className="text-[11px] opacity-80 mt-0.5">
-              {monthSummary.hasPjrBonus ? '(ค่าเวร + พจร. 8,000 บ.)' : '(ยังไม่รวมเงิน พจร.)'}
+              (ค่าเวร ฿{monthSummary.totalDutyEarnings.toLocaleString()} + พจร. ฿{monthSummary.pjrBonusAmount.toLocaleString()})
             </div>
           </div>
         </div>

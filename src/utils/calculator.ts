@@ -94,7 +94,11 @@ export const calculateMonthSummary = (monthKey: string, shifts: Shift[]): MonthS
 
   const totalDutyEarnings = dayShiftEarnings + nightShiftEarnings;
   const hasPjrBonus = totalHours >= PJR_TARGET_HOURS;
-  const pjrBonusAmount = hasPjrBonus ? PJR_BONUS_AMOUNT : 0;
+  
+  // คำนวณเงิน พจร. ตามสัดส่วนชั่วโมงจริง (ชั่วโมง / 100 * 8,000 บาท สูงสุดไม่เกิน 8,000 บาท)
+  const pjrBonusAmount = Math.min(PJR_BONUS_AMOUNT, Math.round((totalHours / PJR_TARGET_HOURS) * PJR_BONUS_AMOUNT));
+  
+  // รายได้สุทธิ = ค่าเวรรวม + เงิน พจร. ตามสัดส่วน
   const netTotalEarnings = totalDutyEarnings + pjrBonusAmount;
 
   const hoursRemaining = Math.max(0, PJR_TARGET_HOURS - totalHours);
