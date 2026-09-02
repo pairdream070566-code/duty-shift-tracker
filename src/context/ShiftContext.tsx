@@ -145,11 +145,23 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (data && Array.isArray(data.shifts)) {
-          setShifts(data.shifts);
+        if (data && Array.isArray(data.shifts) && data.shifts.length > 0) {
+          setShifts(prev => {
+            // ผสานข้อมูลระหว่างเครื่องกับคลาวด์ ไม่ให้ข้อมูลที่มีอยู่เดิมหาย
+            const shiftMap = new Map<string, Shift>();
+            data.shifts.forEach((s: Shift) => shiftMap.set(s.date, s));
+            prev.forEach(s => shiftMap.set(s.date, s)); // Local ล่าสุดทับ
+            return Array.from(shiftMap.values());
+          });
           setSyncStatus('ซิงค์ข้อมูลจากคลาวด์สำเร็จ');
           setTimeout(() => setSyncStatus(''), 3000);
+        } else {
+          // ถ้าบนคลาวด์ยังว่าง ให้อัปโหลดข้อมูลในเครื่องขึ้นคลาวด์ทันที
+          syncWithCloud();
         }
+      } else {
+        // ถ้ายังไม่มีเอกสารบนคลาวด์ ให้อัปโหลดข้อมูลในเครื่องขึ้นคลาวด์
+        syncWithCloud();
       }
     } catch (error) {
       console.error('Load cloud data error:', error);
