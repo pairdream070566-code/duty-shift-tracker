@@ -20,7 +20,8 @@ import {
   doc, 
   setDoc, 
   getDoc, 
-  getFirestore 
+  getFirestore,
+  onSnapshot
 } from 'firebase/firestore';
 
 interface ShiftContextType {
@@ -77,24 +78,6 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   });
 
-  const [isFirebaseReady, setIsFirebaseReady] = useState<boolean>(false);
-
-  useEffect(() => {
-    const { isConfigured } = initFirebase(firebaseConfigState);
-    setIsFirebaseReady(isConfigured);
-
-    if (isConfigured) {
-      const auth = getAuth();
-      const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-        setUser(currentUser);
-        if (currentUser) {
-          loadCloudData(currentUser.uid);
-        }
-      });
-      return () => unsubscribe();
-    }
-  }, [firebaseConfigState]);
-
   const [shifts, setShifts] = useState<Shift[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_SHIFTS);
@@ -112,6 +95,64 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return defaultNotificationConfig;
     }
   });
+
+  const [isFirebaseReady, setIsFirebaseReady] = useState<boolean>(false);
+
+  useEffect(() => {
+    const { isConfigured } = initFirebase(firebaseConfigState);
+    setIsFirebaseReady(isConfigured);
+
+    if (isConfigured) {
+      const auth = getAuth();
+      const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+        setUser(currentUser);
+      });
+      return () => unsubscribeAuth();
+    }
+  }, [firebaseConfigState]);
+
+  // ระบบ Real-time Listener (อัปเดตข้อมูลข้ามเครื่องทันทีแบบเรียลไทม์)
+  useEffect(() => {
+    if (!user) return;
+
+    const db = getFirestore();
+    const docRef = doc(db, 'user_shifts', user.uid);
+
+    const unsubscribeSnapshot = onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data && Array.isArray(data.shifts)) {
+          setShifts(data.shifts);
+          try {
+            localStorage.setItem(STORAGE_KEY_SHIFTS, JSON.stringify(data.shifts));
+          } catch (e) {
+            console.error('Save local shifts failed', e);
+          }
+        }
+      } else {
+        // ถ้ายังไม่มีข้อมูลบนคลาวด์ ให้อัปโหลดข้อมูลในเครื่องปัจจุบันขึ้นไปเป็นตั้งต้น
+        const currentLocal = localStorage.getItem(STORAGE_KEY_SHIFTS);
+        if (currentLocal) {
+          try {
+            const parsed = JSON.parse(currentLocal);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setDoc(docRef, {
+                shifts: parsed,
+                email: user.email,
+                updatedAt: new Date().toISOString(),
+              }, { merge: true });
+            }
+          } catch (e) {
+            console.error(e);
+          }
+        }
+      }
+    }, (error) => {
+      console.error('Realtime sync error:', error);
+    });
+
+    return () => unsubscribeSnapshot();
+  }, [user]);
 
   useEffect(() => {
     try {
@@ -135,40 +176,6 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const monthKey = format(currentMonth, 'yyyy-MM');
   const monthSummary = calculateMonthSummary(monthKey, shifts);
-
-  const loadCloudData = async (uid: string) => {
-    try {
-      setIsSyncing(true);
-      const db = getFirestore();
-      const docRef = doc(db, 'user_shifts', uid);
-      const docSnap = await getDoc(docRef);
-
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        if (data && Array.isArray(data.shifts) && data.shifts.length > 0) {
-          setShifts(prev => {
-            // ผสานข้อมูลระหว่างเครื่องกับคลาวด์ ไม่ให้ข้อมูลที่มีอยู่เดิมหาย
-            const shiftMap = new Map<string, Shift>();
-            data.shifts.forEach((s: Shift) => shiftMap.set(s.date, s));
-            prev.forEach(s => shiftMap.set(s.date, s)); // Local ล่าสุดทับ
-            return Array.from(shiftMap.values());
-          });
-          setSyncStatus('ซิงค์ข้อมูลจากคลาวด์สำเร็จ');
-          setTimeout(() => setSyncStatus(''), 3000);
-        } else {
-          // ถ้าบนคลาวด์ยังว่าง ให้อัปโหลดข้อมูลในเครื่องขึ้นคลาวด์ทันที
-          syncWithCloud();
-        }
-      } else {
-        // ถ้ายังไม่มีเอกสารบนคลาวด์ ให้อัปโหลดข้อมูลในเครื่องขึ้นคลาวด์
-        syncWithCloud();
-      }
-    } catch (error) {
-      console.error('Load cloud data error:', error);
-    } finally {
-      setIsSyncing(false);
-    }
-  };
 
   const syncWithCloud = async () => {
     if (!user) return;
