@@ -3,12 +3,13 @@ import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
 export const DEFAULT_FIREBASE_CONFIG = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN|| "",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || ""
+  apiKey: "AIzaSyDybQ6iu7KafpnYFMfcAK8qFX3NLnS4UfY",
+  authDomain: "duty-tracker-8d69b.firebaseapp.com",
+  projectId: "duty-tracker-8d69b",
+  storageBucket: "duty-tracker-8d69b.firebasestorage.app",
+  messagingSenderId: "385720757524",
+  appId: "1:385720757524:web:4b0d22d2f8545da572a601",
+  measurementId: "G-99HHLBQK1Z"
 };
 
 export const ALLOWED_ADMIN_EMAIL = "pairdream070566@gmail.com";
