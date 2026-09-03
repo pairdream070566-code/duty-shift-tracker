@@ -24,8 +24,8 @@ interface ShiftContextType {
   forceSync: () => void;
 }
 
-const STORAGE_KEY_SHIFTS = 'dream_duty_shifts_v2';
-const STORAGE_KEY_CONFIG = 'dream_duty_config_v2';
+const STORAGE_KEY_SHIFTS = 'DREAM_DUTY_SHIFTS_PERMANENT_V1';
+const STORAGE_KEY_CONFIG = 'DREAM_DUTY_CONFIG_PERMANENT_V1';
 const CLOUD_DOC_ID = 'dream_duty_shifts_master';
 
 const defaultNotificationConfig: NotificationConfig = {
@@ -40,16 +40,42 @@ const ShiftContext = createContext<ShiftContextType | undefined>(undefined);
 export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
-  const [syncStatus, setSyncStatus] = useState<string>('เชื่อมต่อคลาวด์แล้ว');
+  const [syncStatus, setSyncStatus] = useState<string>('พร้อมใช้งาน');
 
   const [shifts, setShifts] = useState<Shift[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_SHIFTS);
-      return saved ? JSON.parse(saved) : [];
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      // ตรวจสอบ key เก่าเผื่อมีข้อมูลตกค้าง
+      const old1 = localStorage.getItem('dream_duty_shifts_v2');
+      if (old1) {
+        const parsed = JSON.parse(old1);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      const old2 = localStorage.getItem('duty_shifts_data_v1');
+      if (old2) {
+        const parsed = JSON.parse(old2);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      return [];
     } catch {
       return [];
     }
   });
+
+  // บันทึกลงเครื่องทันทีทุกครั้งที่ shifts มีการเปลี่ยนแปลง ไม่ว่าจะเกิดจากอะไร
+  useEffect(() => {
+    try {
+      if (shifts.length > 0) {
+        localStorage.setItem(STORAGE_KEY_SHIFTS, JSON.stringify(shifts));
+      }
+    } catch (e) {
+      console.error('Failed to save shifts locally', e);
+    }
+  }, [shifts]);
 
   const [notificationConfig, setNotificationConfig] = useState<NotificationConfig>(() => {
     try {
