@@ -3,10 +3,6 @@ import { useShiftContext } from '../context/ShiftContext';
 import { requestNotificationPermission, sendDutyNotification } from '../utils/notifications';
 import { 
   Bell, 
-  ShieldCheck, 
-  Download, 
-  Upload, 
-  Trash2, 
   Smartphone, 
   Check, 
   Sparkles, 
@@ -16,9 +12,6 @@ import {
 
 export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
   const { 
-    exportData, 
-    importData, 
-    clearAllData,
     forceSync,
     isSyncing,
     syncStatus
@@ -27,7 +20,6 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
   const [hasPermission, setHasPermission] = useState<boolean>(
     'Notification' in window && Notification.permission === 'granted'
   );
-  const [importStatus, setImportStatus] = useState<string>('');
 
   if (!isOpen) return null;
 
@@ -45,26 +37,6 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
     sendDutyNotification('🔔 ทดสอบการแจ้งเตือนเวร', {
       body: 'วันนี้คุณมีเวรกลางคืน (16:30 - 08:30 น.) อย่าลืมเตรียมตัวให้พร้อมนะครับ!',
     });
-  };
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = event.target?.result as string;
-      if (content) {
-        const success = importData(content);
-        if (success) {
-          setImportStatus('นำเข้าข้อมูลสำเร็จ!');
-          setTimeout(() => setImportStatus(''), 3000);
-        } else {
-          setImportStatus('ไฟล์ไม่ถูกต้อง ไม่สามารถนำเข้าได้');
-        }
-      }
-    };
-    reader.readAsText(file);
   };
 
   return (
