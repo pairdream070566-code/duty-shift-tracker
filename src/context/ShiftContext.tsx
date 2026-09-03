@@ -1,28 +1,10 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import type { Shift, NotificationConfig, MonthSummary } from '../types/shift';
+import type { Shift, MonthSummary, NotificationConfig } from '../types/shift';
 import { calculateMonthSummary } from '../utils/calculator';
 import { checkTodayDutyNotification } from '../utils/notifications';
 import { format } from 'date-fns';
-import { 
-  initFirebase, 
-  ALLOWED_ADMIN_EMAIL, 
-  DEFAULT_FIREBASE_CONFIG 
-} from '../utils/firebase';
-import { 
-  signInWithPopup, 
-  signOut, 
-  onAuthStateChanged, 
-  type User,
-  GoogleAuthProvider,
-  getAuth
-} from 'firebase/auth';
-import { 
-  doc, 
-  setDoc, 
-  getDoc, 
-  getFirestore,
-  onSnapshot
-} from 'firebase/firestore';
+import { db } from '../utils/firebase';
+import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 
 interface ShiftContextType {
   shifts: Shift[];
@@ -37,22 +19,14 @@ interface ShiftContextType {
   exportData: () => void;
   importData: (jsonData: string) => boolean;
   clearAllData: () => void;
-  
-  // Auth & Cloud Sync
-  user: User | null;
-  isFirebaseReady: boolean;
-  firebaseConfigState: any;
-  saveFirebaseConfig: (config: any) => void;
-  loginWithGoogle: () => Promise<boolean>;
-  logout: () => Promise<void>;
-  syncWithCloud: () => Promise<void>;
   isSyncing: boolean;
   syncStatus: string;
+  forceSync: () => void;
 }
 
-const STORAGE_KEY_SHIFTS = 'duty_shifts_data_v1';
-const STORAGE_KEY_CONFIG = 'duty_shifts_config_v1';
-const STORAGE_KEY_FIREBASE = 'duty_shifts_firebase_cfg_v1';
+const STORAGE_KEY_SHIFTS = 'dream_duty_shifts_v2';
+const STORAGE_KEY_CONFIG = 'dream_duty_config_v2';
+const CLOUD_DOC_ID = 'dream_duty_shifts_master';
 
 const defaultNotificationConfig: NotificationConfig = {
   enabled: true,
@@ -65,18 +39,8 @@ const ShiftContext = createContext<ShiftContextType | undefined>(undefined);
 
 export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
-  const [user, setUser] = useState<User | null>(null);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
-  const [syncStatus, setSyncStatus] = useState<string>('');
-
-  const [firebaseConfigState, setFirebaseConfigState] = useState<any>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_FIREBASE);
-      return saved ? JSON.parse(saved) : DEFAULT_FIREBASE_CONFIG;
-    } catch {
-      return DEFAULT_FIREBASE_CONFIG;
-    }
-  });
+  const [syncStatus, setSyncStatus] = useState<string>('เชื่อมต่อคลาวด์แล้ว');
 
   const [shifts, setShifts] = useState<Shift[]>(() => {
     try {
@@ -96,25 +60,6 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   });
 
-  const [isFirebaseReady, setIsFirebaseReady] = useState<boolean>(false);
-
-  useEffect(() => {
-    const { isConfigured } = initFirebase(firebaseConfigState);
-    setIsFirebaseReady(isConfigured);
-
-    if (isConfigured) {
-      const auth = getAuth();
-      const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
-        setUser(currentUser);
-      });
-      return () => unsubscribeAuth();
-    }
-  }, [firebaseConfigState]);
-
-  // ระบบ Real-time Listener (อัปเดตข้อมูลข้ามเครื่องทันทีแบบเรียลไทม์ 100% โดยไม่ต้องล็อกอิน)
-  useEffect(() => {
-    const db = getFirestore();
-    const docRef = doc(db, 'user_shifts', 'default_admin_shifts');
 
     const unsubscribeSnapshot = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
