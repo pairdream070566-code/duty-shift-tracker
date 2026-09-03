@@ -111,12 +111,10 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [firebaseConfigState]);
 
-  // ระบบ Real-time Listener (อัปเดตข้อมูลข้ามเครื่องทันทีแบบเรียลไทม์)
-  // ระบบ Real-time Listener (อัปเดตข้อมูลข้ามเครื่องทันทีแบบเรียลไทม์)
+  // ระบบ Real-time Listener (อัปเดตข้อมูลข้ามเครื่องทันทีแบบเรียลไทม์ 100% โดยไม่ต้องล็อกอิน)
   useEffect(() => {
-    const docId = user?.email ? user.email.toLowerCase().replace(/[^a-z0-9]/g, '_') : 'default_admin_shifts';
     const db = getFirestore();
-    const docRef = doc(db, 'user_shifts', docId);
+    const docRef = doc(db, 'user_shifts', 'default_admin_shifts');
 
     const unsubscribeSnapshot = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
@@ -130,7 +128,7 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           }
         }
       } else {
-        // ถ้ายังไม่มีข้อมูลบนคลาวด์ ให้อัปโหลดข้อมูลในเครื่องปัจจุบันขึ้นไปเป็นตั้งต้น
+        // ถ้ายังไม่มีข้อมูลบนคลาวด์ ให้อัปโหลดข้อมูลในเครื่องปัจจุบันขึ้นไป
         const currentLocal = localStorage.getItem(STORAGE_KEY_SHIFTS);
         if (currentLocal) {
           try {
@@ -138,7 +136,6 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             if (Array.isArray(parsed) && parsed.length > 0) {
               setDoc(docRef, {
                 shifts: parsed,
-                email: user?.email || ALLOWED_ADMIN_EMAIL,
                 updatedAt: new Date().toISOString(),
               }, { merge: true });
             }
@@ -152,7 +149,7 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     });
 
     return () => unsubscribeSnapshot();
-  }, [user]);
+  }, []);
 
   useEffect(() => {
     try {
@@ -243,19 +240,41 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       } else {
         updated = [...prev, newShift];
       }
+      
+      // ส่งขึ้น Cloud อัตโนมัติทันที
+      try {
+        const db = getFirestore();
+        const docRef = doc(db, 'user_shifts', 'default_admin_shifts');
+        setDoc(docRef, {
+          shifts: updated,
+          updatedAt: new Date().toISOString(),
+        }, { merge: true });
+      } catch (e) {
+        console.error(e);
+      }
+      
       return updated;
     });
-
-    if (user) {
-      setTimeout(() => syncWithCloud(), 500);
-    }
   };
 
   const deleteShift = (id: string) => {
-    setShifts(prev => prev.filter(s => s.id !== id && s.date !== id));
-    if (user) {
-      setTimeout(() => syncWithCloud(), 500);
-    }
+    setShifts(prev => {
+      const updated = prev.filter(s => s.id !== id && s.date !== id);
+      
+      // ส่งขึ้น Cloud อัตโนมัติทันที
+      try {
+        const db = getFirestore();
+        const docRef = doc(db, 'user_shifts', 'default_admin_shifts');
+        setDoc(docRef, {
+          shifts: updated,
+          updatedAt: new Date().toISOString(),
+        }, { merge: true });
+      } catch (e) {
+        console.error(e);
+      }
+      
+      return updated;
+    });
   };
 
   const getShiftByDate = (dateStr: string): Shift | undefined => {
