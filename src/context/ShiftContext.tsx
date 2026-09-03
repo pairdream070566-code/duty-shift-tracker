@@ -68,7 +68,7 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (data && Array.isArray(data.shifts)) {
+        if (data && Array.isArray(data.shifts) && data.shifts.length > 0) {
           setShifts(data.shifts);
           try {
             localStorage.setItem(STORAGE_KEY_SHIFTS, JSON.stringify(data.shifts));
@@ -76,6 +76,19 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             console.error(e);
           }
           setSyncStatus('ซิงค์ข้อมูลเรียลไทม์สำเร็จ');
+        } else {
+          // ถ้าเอกสารบนคลาวด์เป็นอาร์เรย์ว่าง ให้ส่งข้อมูลจากเครื่องขึ้นไปแทน
+          const currentLocal = localStorage.getItem(STORAGE_KEY_SHIFTS);
+          if (currentLocal) {
+            try {
+              const parsed = JSON.parse(currentLocal);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                setDoc(docRef, { shifts: parsed, updatedAt: new Date().toISOString() }, { merge: true });
+              }
+            } catch (e) {
+              console.error(e);
+            }
+          }
         }
       } else {
         const currentLocal = localStorage.getItem(STORAGE_KEY_SHIFTS);
@@ -83,7 +96,7 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           try {
             const parsed = JSON.parse(currentLocal);
             if (Array.isArray(parsed) && parsed.length > 0) {
-              setDoc(docRef, { shifts: parsed, updatedAt: new Date().toISOString() });
+              setDoc(docRef, { shifts: parsed, updatedAt: new Date().toISOString() }, { merge: true });
             }
           } catch (e) {
             console.error(e);
@@ -99,6 +112,13 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const saveToCloud = async (newShifts: Shift[]) => {
+    // บันทึกลงเครื่องทันทีก่อนเสมอ ไม่ต้องรอคลาวด์
+    try {
+      localStorage.setItem(STORAGE_KEY_SHIFTS, JSON.stringify(newShifts));
+    } catch (e) {
+      console.error(e);
+    }
+
     try {
       setIsSyncing(true);
       const docRef = doc(db, 'shared_duty_tracker', CLOUD_DOC_ID);
@@ -106,7 +126,6 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         shifts: newShifts,
         updatedAt: new Date().toISOString(),
       }, { merge: true });
-      localStorage.setItem(STORAGE_KEY_SHIFTS, JSON.stringify(newShifts));
       setSyncStatus('บันทึกขึ้นคลาวด์เรียบร้อย');
     } catch (e) {
       console.error('Save to cloud failed:', e);
@@ -125,6 +144,7 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       } else {
         updated = [...prev, newShift];
       }
+      // เซฟลงทั้งเครื่องและคลาวด์ทันที
       saveToCloud(updated);
       return updated;
     });
