@@ -42,40 +42,30 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [syncStatus, setSyncStatus] = useState<string>('พร้อมใช้งาน');
 
+  // โหลดข้อมูลที่มีอยู่จาก localStorage ทันที
   const [shifts, setShifts] = useState<Shift[]>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY_SHIFTS);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-      // ตรวจสอบ key เก่าเผื่อมีข้อมูลตกค้าง
-      const old1 = localStorage.getItem('dream_duty_shifts_v2');
-      if (old1) {
-        const parsed = JSON.parse(old1);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-      const old2 = localStorage.getItem('duty_shifts_data_v1');
-      if (old2) {
-        const parsed = JSON.parse(old2);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      const keys = [
+        STORAGE_KEY_SHIFTS,
+        'dream_duty_shifts_v2',
+        'duty_shifts_data_v1',
+        'dream_duty_shifts_master_v3'
+      ];
+      for (const k of keys) {
+        const item = localStorage.getItem(k);
+        if (item) {
+          const parsed = JSON.parse(item);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            localStorage.setItem(STORAGE_KEY_SHIFTS, JSON.stringify(parsed));
+            return parsed;
+          }
+        }
       }
       return [];
     } catch {
       return [];
     }
   });
-
-  // บันทึกลงเครื่องทันทีทุกครั้งที่ shifts มีการเปลี่ยนแปลง ไม่ว่าจะเกิดจากอะไร
-  useEffect(() => {
-    try {
-      if (shifts.length > 0) {
-        localStorage.setItem(STORAGE_KEY_SHIFTS, JSON.stringify(shifts));
-      }
-    } catch (e) {
-      console.error('Failed to save shifts locally', e);
-    }
-  }, [shifts]);
 
   const [notificationConfig, setNotificationConfig] = useState<NotificationConfig>(() => {
     try {
@@ -86,41 +76,44 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   });
 
-
-  // Real-time Cloud Listener เชื่อมต่อตรงตลอดเวลา
+  // Real-time Cloud Listener
   useEffect(() => {
     const docRef = doc(db, 'shared_duty_tracker', CLOUD_DOC_ID);
 
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (data && Array.isArray(data.shifts) && data.shifts.length > 0) {
-          setShifts(data.shifts);
-          try {
-            localStorage.setItem(STORAGE_KEY_SHIFTS, JSON.stringify(data.shifts));
-          } catch (e) {
-            console.error(e);
-          }
-          setSyncStatus('ซิงค์ข้อมูลเรียลไทม์สำเร็จ');
-        } else {
-          // ถ้าเอกสารบนคลาวด์เป็นอาร์เรย์ว่าง ให้ส่งข้อมูลจากเครื่องขึ้นไปแทน
-          const currentLocal = localStorage.getItem(STORAGE_KEY_SHIFTS);
-          if (currentLocal) {
+        if (data && Array.isArray(data.shifts)) {
+          if (data.shifts.length > 0) {
+            // คลาวด์มีข้อมูล ให้อัปเดตทั้ง state และ localStorage
+            setShifts(data.shifts);
             try {
-              const parsed = JSON.parse(currentLocal);
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                setDoc(docRef, { shifts: parsed, updatedAt: new Date().toISOString() }, { merge: true });
-              }
+              localStorage.setItem(STORAGE_KEY_SHIFTS, JSON.stringify(data.shifts));
             } catch (e) {
               console.error(e);
+            }
+            setSyncStatus('ซิงค์ข้อมูลเรียลไทม์สำเร็จ');
+          } else {
+            // ถ้าบนคลาวด์ว่าง แต่ในเครื่องเรามี ให้ดันข้อมูลในเครื่องขึ้นคลาวด์
+            const localSaved = localStorage.getItem(STORAGE_KEY_SHIFTS);
+            if (localSaved) {
+              try {
+                const parsed = JSON.parse(localSaved);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                  setDoc(docRef, { shifts: parsed, updatedAt: new Date().toISOString() }, { merge: true });
+                }
+              } catch (e) {
+                console.error(e);
+              }
             }
           }
         }
       } else {
-        const currentLocal = localStorage.getItem(STORAGE_KEY_SHIFTS);
-        if (currentLocal) {
+        // เอกสารยังไม่มีบนคลาวด์ ให้สร้างจากข้อมูลในเครื่อง
+        const localSaved = localStorage.getItem(STORAGE_KEY_SHIFTS);
+        if (localSaved) {
           try {
-            const parsed = JSON.parse(currentLocal);
+            const parsed = JSON.parse(localSaved);
             if (Array.isArray(parsed) && parsed.length > 0) {
               setDoc(docRef, { shifts: parsed, updatedAt: new Date().toISOString() }, { merge: true });
             }
@@ -130,7 +123,7 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
       }
     }, (error) => {
-      console.error('Realtime sync error:', error);
+      console.warn('Firestore realtime error:', error);
       setSyncStatus('โหมดออฟไลน์ (บันทึกในเครื่อง)');
     });
 
@@ -138,13 +131,6 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const saveToCloud = async (newShifts: Shift[]) => {
-    // บันทึกลงเครื่องทันทีก่อนเสมอ ไม่ต้องรอคลาวด์
-    try {
-      localStorage.setItem(STORAGE_KEY_SHIFTS, JSON.stringify(newShifts));
-    } catch (e) {
-      console.error(e);
-    }
-
     try {
       setIsSyncing(true);
       const docRef = doc(db, 'shared_duty_tracker', CLOUD_DOC_ID);
@@ -155,33 +141,66 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setSyncStatus('บันทึกขึ้นคลาวด์เรียบร้อย');
     } catch (e) {
       console.error('Save to cloud failed:', e);
+      setSyncStatus('บันทึกในเครื่องแล้ว');
     } finally {
       setIsSyncing(false);
     }
   };
 
   const addOrUpdateShift = (newShift: Shift) => {
-    setShifts(prev => {
-      const index = prev.findIndex(s => s.id === newShift.id || s.date === newShift.date);
-      let updated: Shift[];
-      if (index >= 0) {
-        updated = [...prev];
-        updated[index] = newShift;
-      } else {
-        updated = [...prev, newShift];
+    // 1. อ่านข้อมูลปัจจุบันจาก localStorage โดยตรงก่อน เพื่อป้องกัน state ไม่ตรง
+    let currentShifts: Shift[] = [];
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_SHIFTS);
+      if (saved) {
+        currentShifts = JSON.parse(saved);
       }
-      // เซฟลงทั้งเครื่องและคลาวด์ทันที
-      saveToCloud(updated);
-      return updated;
-    });
+    } catch {
+      currentShifts = shifts;
+    }
+
+    const index = currentShifts.findIndex(s => s.id === newShift.id || s.date === newShift.date);
+    let updated: Shift[];
+    if (index >= 0) {
+      updated = [...currentShifts];
+      updated[index] = newShift;
+    } else {
+      updated = [...currentShifts, newShift];
+    }
+
+    // 2. เขียนลง localStorage ทันทีแบบ synchronous ก่อนเสมอ!
+    try {
+      localStorage.setItem(STORAGE_KEY_SHIFTS, JSON.stringify(updated));
+    } catch (e) {
+      console.error('Save to localStorage failed:', e);
+    }
+
+    // 3. อัปเดต React State
+    setShifts(updated);
+
+    // 4. ส่งข้อมูลขึ้น Cloud
+    saveToCloud(updated);
   };
 
   const deleteShift = (id: string) => {
-    setShifts(prev => {
-      const updated = prev.filter(s => s.id !== id && s.date !== id);
-      saveToCloud(updated);
-      return updated;
-    });
+    let currentShifts: Shift[] = [];
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_SHIFTS);
+      if (saved) {
+        currentShifts = JSON.parse(saved);
+      }
+    } catch {
+      currentShifts = shifts;
+    }
+
+    const updated = currentShifts.filter(s => s.id !== id && s.date !== id);
+    try {
+      localStorage.setItem(STORAGE_KEY_SHIFTS, JSON.stringify(updated));
+    } catch (e) {
+      console.error('Delete shift from localStorage failed:', e);
+    }
+    setShifts(updated);
+    saveToCloud(updated);
   };
 
   const forceSync = () => {
