@@ -61,7 +61,11 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   });
 
 
-    const unsubscribeSnapshot = onSnapshot(docRef, (docSnap) => {
+  // Real-time Cloud Listener เชื่อมต่อตรงตลอดเวลา
+  useEffect(() => {
+    const docRef = doc(db, 'shared_duty_tracker', CLOUD_DOC_ID);
+
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
         if (data && Array.isArray(data.shifts)) {
@@ -69,20 +73,17 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           try {
             localStorage.setItem(STORAGE_KEY_SHIFTS, JSON.stringify(data.shifts));
           } catch (e) {
-            console.error('Save local shifts failed', e);
+            console.error(e);
           }
+          setSyncStatus('ซิงค์ข้อมูลเรียลไทม์สำเร็จ');
         }
       } else {
-        // ถ้ายังไม่มีข้อมูลบนคลาวด์ ให้อัปโหลดข้อมูลในเครื่องปัจจุบันขึ้นไป
         const currentLocal = localStorage.getItem(STORAGE_KEY_SHIFTS);
         if (currentLocal) {
           try {
             const parsed = JSON.parse(currentLocal);
             if (Array.isArray(parsed) && parsed.length > 0) {
-              setDoc(docRef, {
-                shifts: parsed,
-                updatedAt: new Date().toISOString(),
-              }, { merge: true });
+              setDoc(docRef, { shifts: parsed, updatedAt: new Date().toISOString() });
             }
           } catch (e) {
             console.error(e);
@@ -91,18 +92,55 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     }, (error) => {
       console.error('Realtime sync error:', error);
+      setSyncStatus('โหมดออฟไลน์ (บันทึกในเครื่อง)');
     });
 
-    return () => unsubscribeSnapshot();
+    return () => unsubscribe();
   }, []);
 
-  useEffect(() => {
+  const saveToCloud = async (newShifts: Shift[]) => {
     try {
-      localStorage.setItem(STORAGE_KEY_SHIFTS, JSON.stringify(shifts));
+      setIsSyncing(true);
+      const docRef = doc(db, 'shared_duty_tracker', CLOUD_DOC_ID);
+      await setDoc(docRef, {
+        shifts: newShifts,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+      localStorage.setItem(STORAGE_KEY_SHIFTS, JSON.stringify(newShifts));
+      setSyncStatus('บันทึกขึ้นคลาวด์เรียบร้อย');
     } catch (e) {
-      console.error('Save shifts failed', e);
+      console.error('Save to cloud failed:', e);
+    } finally {
+      setIsSyncing(false);
     }
-  }, [shifts]);
+  };
+
+  const addOrUpdateShift = (newShift: Shift) => {
+    setShifts(prev => {
+      const index = prev.findIndex(s => s.id === newShift.id || s.date === newShift.date);
+      let updated: Shift[];
+      if (index >= 0) {
+        updated = [...prev];
+        updated[index] = newShift;
+      } else {
+        updated = [...prev, newShift];
+      }
+      saveToCloud(updated);
+      return updated;
+    });
+  };
+
+  const deleteShift = (id: string) => {
+    setShifts(prev => {
+      const updated = prev.filter(s => s.id !== id && s.date !== id);
+      saveToCloud(updated);
+      return updated;
+    });
+  };
+
+  const forceSync = () => {
+    saveToCloud(shifts);
+  };
 
   useEffect(() => {
     try {
@@ -119,109 +157,6 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const monthKey = format(currentMonth, 'yyyy-MM');
   const monthSummary = calculateMonthSummary(monthKey, shifts);
 
-  const syncWithCloud = async () => {
-    try {
-      setIsSyncing(true);
-      const docId = user?.email ? user.email.toLowerCase().replace(/[^a-z0-9]/g, '_') : 'default_admin_shifts';
-      const db = getFirestore();
-      const docRef = doc(db, 'user_shifts', docId);
-      await setDoc(docRef, {
-        shifts,
-        email: user?.email || ALLOWED_ADMIN_EMAIL,
-        updatedAt: new Date().toISOString(),
-      }, { merge: true });
-
-      setSyncStatus('บันทึกข้อมูลขึ้นระบบคลาวด์ออนไลน์แล้ว');
-      setTimeout(() => setSyncStatus(''), 3000);
-    } catch (error) {
-      console.error('Sync cloud error:', error);
-      setSyncStatus('ซิงค์ไม่สำเร็จ โปรดลองใหม่อีกครั้ง');
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const loginWithGoogle = async (): Promise<boolean> => {
-    try {
-      const auth = getAuth();
-      const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
-      
-      if (result.user.email?.toLowerCase() !== ALLOWED_ADMIN_EMAIL.toLowerCase()) {
-        console.warn(`เข้าสู่ระบบด้วยอีเมล ${result.user.email} (แอดมินหลักคือ ${ALLOWED_ADMIN_EMAIL})`);
-      }
-      
-      setUser(result.user);
-      return true;
-    } catch (error) {
-      console.error('Login error:', error);
-      alert('เข้าสู่ระบบด้วย Google ไม่สำเร็จ: ' + (error as any)?.message);
-      return false;
-    }
-  };
-
-  const logout = async () => {
-    try {
-      const auth = getAuth();
-      await signOut(auth);
-      setUser(null);
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
-  };
-
-  const saveFirebaseConfig = (config: any) => {
-    localStorage.setItem(STORAGE_KEY_FIREBASE, JSON.stringify(config));
-    setFirebaseConfigState(config);
-  };
-
-  const addOrUpdateShift = (newShift: Shift) => {
-    setShifts(prev => {
-      const index = prev.findIndex(s => s.id === newShift.id || s.date === newShift.date);
-      let updated: Shift[];
-      if (index >= 0) {
-        updated = [...prev];
-        updated[index] = newShift;
-      } else {
-        updated = [...prev, newShift];
-      }
-      
-      // ส่งขึ้น Cloud อัตโนมัติทันที
-      try {
-        const db = getFirestore();
-        const docRef = doc(db, 'user_shifts', 'default_admin_shifts');
-        setDoc(docRef, {
-          shifts: updated,
-          updatedAt: new Date().toISOString(),
-        }, { merge: true });
-      } catch (e) {
-        console.error(e);
-      }
-      
-      return updated;
-    });
-  };
-
-  const deleteShift = (id: string) => {
-    setShifts(prev => {
-      const updated = prev.filter(s => s.id !== id && s.date !== id);
-      
-      // ส่งขึ้น Cloud อัตโนมัติทันที
-      try {
-        const db = getFirestore();
-        const docRef = doc(db, 'user_shifts', 'default_admin_shifts');
-        setDoc(docRef, {
-          shifts: updated,
-          updatedAt: new Date().toISOString(),
-        }, { merge: true });
-      } catch (e) {
-        console.error(e);
-      }
-      
-      return updated;
-    });
-  };
-
   const getShiftByDate = (dateStr: string): Shift | undefined => {
     return shifts.find(s => s.date === dateStr);
   };
@@ -230,7 +165,7 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(shifts, null, 2));
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", `duty_shifts_backup_${format(new Date(), 'yyyyMMdd_HHmm')}.json`);
+    downloadAnchor.setAttribute("download", `ตารางเวรของดรีม_${format(new Date(), 'yyyyMMdd_HHmm')}.json`);
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
@@ -241,9 +176,7 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const parsed = JSON.parse(jsonData);
       if (Array.isArray(parsed)) {
         setShifts(parsed);
-        if (user) {
-          setTimeout(() => syncWithCloud(), 500);
-        }
+        saveToCloud(parsed);
         return true;
       }
       return false;
@@ -255,6 +188,7 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const clearAllData = () => {
     if (window.confirm('คุณแน่ใจหรือไม่ว่าต้องการลบข้อมูลตารางเวรทั้งหมด?')) {
       setShifts([]);
+      saveToCloud([]);
     }
   };
 
@@ -273,15 +207,9 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         exportData,
         importData,
         clearAllData,
-        user,
-        isFirebaseReady,
-        firebaseConfigState,
-        saveFirebaseConfig,
-        loginWithGoogle,
-        logout,
-        syncWithCloud,
         isSyncing,
         syncStatus,
+        forceSync,
       }}
     >
       {children}

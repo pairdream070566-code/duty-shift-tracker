@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useShiftContext } from '../context/ShiftContext';
 import { requestNotificationPermission, sendDutyNotification } from '../utils/notifications';
-import { ALLOWED_ADMIN_EMAIL } from '../utils/firebase';
 import { 
   Bell, 
   ShieldCheck, 
@@ -12,10 +11,7 @@ import {
   Check, 
   Sparkles, 
   Cloud, 
-  LogOut, 
-  KeyRound, 
-  RefreshCw,
-  User as UserIcon
+  RefreshCw
 } from 'lucide-react';
 
 export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
@@ -23,12 +19,7 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
     exportData, 
     importData, 
     clearAllData,
-    user,
-    firebaseConfigState,
-    saveFirebaseConfig,
-    loginWithGoogle,
-    logout,
-    syncWithCloud,
+    forceSync,
     isSyncing,
     syncStatus
   } = useShiftContext();
@@ -37,10 +28,6 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
     'Notification' in window && Notification.permission === 'granted'
   );
   const [importStatus, setImportStatus] = useState<string>('');
-  const [showConfigForm, setShowConfigForm] = useState<boolean>(false);
-  const [configJson, setConfigJson] = useState<string>(
-    JSON.stringify(firebaseConfigState, null, 2)
-  );
 
   if (!isOpen) return null;
 
@@ -78,17 +65,6 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
       }
     };
     reader.readAsText(file);
-  };
-
-  const handleSaveFirebaseKeys = () => {
-    try {
-      const parsed = JSON.parse(configJson);
-      saveFirebaseConfig(parsed);
-      setShowConfigForm(false);
-      alert('บันทึกการตั้งค่า Firebase สำเร็จ!');
-    } catch {
-      alert('รูปแบบ JSON ของ Firebase Config ไม่ถูกต้อง');
-    }
   };
 
   return (
@@ -129,7 +105,7 @@ export const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
               </p>
               
               <button
-                onClick={() => syncWithCloud()}
+                onClick={() => forceSync()}
                 disabled={isSyncing}
                 className="w-full py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 active:scale-98"
               >
